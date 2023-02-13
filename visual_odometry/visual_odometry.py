@@ -13,7 +13,7 @@ class VisualOdometry():
         self.K, self.P = self._load_calib(os.path.join(data_dir, 'calib.txt'))
         self.gt_poses = self._load_poses(os.path.join(data_dir,"poses.txt"))
         self.images = self._load_images(os.path.join(data_dir,"image_l"))
-        self.orb = cv2.ORB_create(3000)
+        self.orb = cv2.ORB_create(3000)     #инициализация детектора ORB
         FLANN_INDEX_LSH = 6
         index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
         search_params = dict(checks=50)
@@ -22,56 +22,49 @@ class VisualOdometry():
     @staticmethod
     def _load_calib(filepath):
         """
-        Loads the calibration of the camera
-        Parameters
-        ----------
-        filepath (str): The file path to the camera file
+        Функция загружает калибровку камеры
+        Параметры:
+        filepath - путь к файлу камеры (str)
+        Возвращает:
+        K (ndarray): Внутренние параметры
+        P (ndarray): Проекционная матрица
 
-        Returns
-        -------
-        K (ndarray): Intrinsic parameters
-        P (ndarray): Projection matrix
         """
-        with open(filepath, 'r') as f:
-            params = np.fromstring(f.readline(), dtype=np.float64, sep=' ')
-            P = np.reshape(params, (3, 4))
-            K = P[0:3, 0:3]
+        with open(filepath, 'r') as f:   #открывается файл в режиме чтения
+            params = np.fromstring(f.readline(), dtype=np.float64, sep=' ')     #params одномерный массив, который заполнен данными из одной целой строки файла
+            P = np.reshape(params, (3, 4))      #изменяет форму массива на размер (3, 4)
+            K = P[0:3, 0:3]     #уберает нули 
         return K, P
 
     @staticmethod
     def _load_poses(filepath):
         """
-        Loads the GT poses
-
-        Parameters
-        ----------
-        filepath (str): The file path to the poses file
-
-        Returns
-        -------
-        poses (ndarray): The GT poses
+        Функция загружает позиции GT
+        Параметры:
+        filepath - путь к файлу камеры (str)
+        Возвращает:
+        poses (ndarray):  массив с позицией
         """
         poses = []
-        with open(filepath, 'r') as f:
-            for line in f.readlines():
-                T = np.fromstring(line, dtype=np.float64, sep=' ')
-                T = T.reshape(3, 4)
-                T = np.vstack((T, [0, 0, 0, 1]))
+        with open(filepath, 'r') as f:      #открывается файл в режиме чтения
+            for line in f.readlines():      #считывается строка
+                T = np.fromstring(line, dtype=np.float64, sep=' ')      #размерность [0:12]
+                T = T.reshape(3, 4)     #размерность [3:4]
+                T = np.vstack((T, [0, 0, 0, 1]))    #добавляет массив [0,0,0,1] в конец массива
                 poses.append(T)
         return poses
 
     @staticmethod
     def _load_images(filepath):
         """
-        Loads the images
-
-        Parameters
-        ----------
-        filepath (str): The file path to image dir
-
-        Returns
-        -------
-        images (list): grayscale images
+        Функция загружает изображения
+        Параметры:
+        filepath - путь к каталогу изображений (str)
+        Возвращает:
+        images (list): изображения в оттенках серого
+        Описание: 
+        1)в лист image_paths по пути filepath добавляется сортированный список , содержащий имена файлов и директорий в каталоге
+        2)изображения из листа image_paths преобразуются в массив ndarray с оттенком серого и добавляются в лист
         """
         image_paths = [os.path.join(filepath, file) for file in sorted(os.listdir(filepath))]
         return [cv2.imread(path, cv2.IMREAD_GRAYSCALE) for path in image_paths]
@@ -227,11 +220,11 @@ def main():
     data_dir = "KITTI_sequence_1"  # Try KITTI_sequence_2 too
     vo = VisualOdometry(data_dir)
 
-    play_trip(vo.images)  # Comment out to not play the trip
+    play_trip(vo.images)  # Прокомментируйте, чтобы не воспроизводить поездку
 
     gt_path = []
     estimated_path = []
-    for i, gt_pose in enumerate(tqdm(vo.gt_poses, unit="pose")):
+    for i, gt_pose in enumerate(tqdm(vo.gt_poses, unit="pose")): #передается массив с позицией, i - индекс 
         if i == 0:
             cur_pose = gt_pose
         else:
