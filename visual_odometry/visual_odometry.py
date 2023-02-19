@@ -209,7 +209,7 @@ class VisualOdometry():
 
 
 def main():
-    data_dir = 'data'#"KITTI_sequence_1"  # Try KITTI_sequence_2 too
+    data_dir = 'train_data'#"KITTI_sequence_1"  # Try KITTI_sequence_2 too
     vo = VisualOdometry(data_dir)
 
     play_trip(vo.images)  # Прокомментируйте, чтобы не воспроизводить поездку
