@@ -13,7 +13,7 @@ class VisualOdometry():
         self.K, self.P = self._load_calib(os.path.join(data_dir, 'calib.txt'))
         self.gt_poses = self._load_poses(os.path.join(data_dir,"poses.txt"))
         self.images = self._load_images(os.path.join(data_dir,"image_l"))
-        self.orb = cv2.ORB_create(3000)     #инициализация детектора ORB
+        self.orb = cv2.ORB_create(7500) #3000     #инициализация детектора ORB 750 - хорошо
         FLANN_INDEX_LSH = 6
         index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
         search_params = dict(checks=50)
@@ -209,25 +209,27 @@ class VisualOdometry():
 
 
 def main():
-    data_dir = "KITTI_sequence_1"  # Try KITTI_sequence_2 too
+    data_dir = 'data'#"KITTI_sequence_1"  # Try KITTI_sequence_2 too
     vo = VisualOdometry(data_dir)
 
     play_trip(vo.images)  # Прокомментируйте, чтобы не воспроизводить поездку
 
     gt_path = []
+    
     estimated_path = []
     for i, gt_pose in enumerate(tqdm(vo.gt_poses, unit="pose")): #передается массив с позицией, i - индекс 
         if i == 0:
             cur_pose = gt_pose
         else:
             q1, q2 = vo.get_matches(i)
-            transf = vo.get_pose(q1, q2)
+            transf = vo.get_pose(q1, q2) #transf = np.nan_to_num(transf, neginf=0,posinf=0)
+            transf = np.nan_to_num(transf, neginf=0,posinf=0)
             cur_pose = np.matmul(cur_pose, np.linalg.inv(transf)) #вычисляем обратную матрицу transf и находим произведение с cur_pose
         gt_path.append((gt_pose[0, 3], gt_pose[2, 3]))
         estimated_path.append((cur_pose[0, 3], cur_pose[2, 3]))
     # Отрисовка графиков
-    plotting.visualize_paths(gt_path, estimated_path, "Visual Odometry", file_out=os.path.basename(data_dir) + ".html")
-
+    plotting.visualize_paths(estimated_path, estimated_path, "Visual Odometry", file_out=os.path.basename(data_dir) + ".html")
+#gt_path
 
 if __name__ == "__main__":
     main()
