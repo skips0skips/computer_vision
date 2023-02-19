@@ -7,6 +7,10 @@ from lib.visualization.video import play_trip
 
 from tqdm import tqdm
 
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import animation
+
 
 class VisualOdometry():
     def __init__(self, data_dir):
@@ -33,7 +37,7 @@ class VisualOdometry():
         with open(filepath, 'r') as f:   #открывается файл в режиме чтения
             params = np.fromstring(f.readline(), dtype=np.float64, sep=' ')     #params одномерный массив, который заполнен данными из одной целой строки файла
             P = np.reshape(params, (3, 4))      #изменяет форму массива на размер (3, 4)
-            K = P[0:3, 0:3]     #уберает нули 
+            K = P[0:3, 0:3]     #уберает нули
         return K, P
 
     @staticmethod
@@ -62,7 +66,7 @@ class VisualOdometry():
         filepath - путь к каталогу изображений (str)
         Возвращает:
         images (list): изображения в оттенках серого
-        Описание: 
+        Описание:
         1)в лист image_paths по пути filepath добавляется сортированный список , содержащий имена файлов и директорий в каталоге
         2)изображения из листа image_paths преобразуются в массив ndarray с оттенком серого и добавляются в лист
         """
@@ -113,13 +117,18 @@ class VisualOdometry():
                  singlePointColor = None, #Цвет отдельных ключевых точек (кружков), что означает, что ключевые точки не имеют совпадений
                  matchesMask = None, # Маска, определяющая, какие совпадения будут нарисованы. Если маска пуста, все совпадения отображаются
                  flags = 2) #Флаги, устанавливающие функции рисования
-        
+
         # Рисует найденные совпадения ключевых точек из двух изображений.
         # images[i], images[i-1] - первое и второе исходное изображение
         # kp1, kp2 - ключевые точки из первого и второго исходного изображения
         # good - список точек соответствия первого и воторого изображения
         # outImg - вывод изображения
         img3 = cv2.drawMatches(self.images[i], kp1, self.images[i-1],kp2, good ,outImg = None,**draw_params)
+
+        # Меняет размер drawMatches на размер одного изображения
+        height, width = self.images[i].shape
+        img3 = cv2.resize(img3, (width, height))
+
         cv2.imshow("image", img3)
         cv2.waitKey(200)
 
@@ -164,7 +173,7 @@ class VisualOdometry():
             # Создание проекционной матрицы
             P = np.matmul(np.concatenate((self.K, np.zeros((3, 1))), axis=1), T)
 
-            # Триангуляция 3D-точек 
+            # Триангуляция 3D-точек
             hom_Q1 = cv2.triangulatePoints(self.P, P, q1.T, q2.T)
             hom_Q2 = np.matmul(T, hom_Q1)
 
@@ -215,9 +224,9 @@ def main():
     play_trip(vo.images)  # Прокомментируйте, чтобы не воспроизводить поездку
 
     gt_path = []
-    
+
     estimated_path = []
-    for i, gt_pose in enumerate(tqdm(vo.gt_poses, unit="pose")): #передается массив с позицией, i - индекс 
+    for i, gt_pose in enumerate(tqdm(vo.gt_poses, unit="pose")): #передается массив с позицией, i - индекс
         if i == 0:
             cur_pose = gt_pose
         else:
@@ -229,7 +238,49 @@ def main():
         estimated_path.append((cur_pose[0, 3], cur_pose[2, 3]))
     # Отрисовка графиков
     plotting.visualize_paths(estimated_path, estimated_path, "Visual Odometry", file_out=os.path.basename(data_dir) + ".html")
-#gt_path
+
+    x = []
+    y = []
+    z = []
+    for i in estimated_path:
+        x.append(i[0])
+        y.append(i[1])
+        z.append(0)
+
+    t = np.linspace(0, 10)
+    dataSet = np.array([x, y, z])  # Комбинируем наши позиционные координаты
+    numDataPoints = len(t)
+
+    def animate_func(num):
+        ax.clear()  # Очищаем фигуру для обновления линии, точки,
+                    # заголовка и осей  # Обновляем линию траектории (num+1 из-за индексации Python)
+        if (num < len(x)):
+            ax.plot3D(dataSet[0, :num+1], dataSet[1, :num+1],
+                        dataSet[2, :num+1], c='blue')    # Обновляем локацию точки
+            ax.scatter(dataSet[0, num], dataSet[1, num], dataSet[2, num],
+                        c='blue', marker='o')    # Добавляем постоянную начальную точку
+            ax.plot3D(dataSet[0, 0], dataSet[1, 0], dataSet[2, 0],
+                        c='black', marker='o')    # Задаем пределы для осей
+        ax.set_xlim3d([min(x)-5, max(x)+10])
+        ax.set_ylim3d([min(y)-5, max(y)+10])
+        ax.set_zlim3d([0, 1])
+        # ax.set_axis_off()
+        # ax.view_init(90, 270)
+
+
+        # Добавляем метки
+        ax.set_title('Траектория движения \nTime = ' + str(np.round(t[num], decimals=2)) + ' sec')
+
+
+    fig = plt.figure()
+    ax = plt.axes(projection='3d')
+    line_ani = animation.FuncAnimation(fig, animate_func, interval=100,
+                                    frames=numDataPoints)
+    # plt.show()
+
+    # f = r"C:/Users/Hp/Desktop/visual_odometry/вид_сверху.gif"
+    # writergif = animation.PillowWriter(fps=numDataPoints/6)
+    # line_ani.save(f, writer=writergif)
 
 if __name__ == "__main__":
     main()
