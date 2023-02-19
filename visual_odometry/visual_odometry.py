@@ -13,7 +13,7 @@ class VisualOdometry():
         self.K, self.P = self._load_calib(os.path.join(data_dir, 'calib.txt'))
         self.gt_poses = self._load_poses(os.path.join(data_dir,"poses.txt"))
         self.images = self._load_images(os.path.join(data_dir,"image_l"))
-        self.orb = cv2.ORB_create(7500) #3000     #инициализация детектора ORB 750 - хорошо
+        self.orb = cv2.ORB_create(10000) #3000     #инициализация детектора ORB 750 - хорошо
         FLANN_INDEX_LSH = 6
         index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
         search_params = dict(checks=50)
