@@ -11,13 +11,12 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import animation
 
-
 class VisualOdometry():
     def __init__(self, data_dir):
         self.K, self.P = self._load_calib(os.path.join(data_dir, 'calib.txt'))
         self.gt_poses = self._load_poses(os.path.join(data_dir,"poses.txt"))
         self.images = self._load_images(os.path.join(data_dir,"image_l"))
-        self.orb = cv2.ORB_create(7500) #3000     #инициализация детектора ORB 750 - хорошо
+        self.orb = cv2.ORB_create(99999999) #3000     #инициализация детектора ORB 7500 - хорошо
         FLANN_INDEX_LSH = 6
         index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
         search_params = dict(checks=50)
@@ -129,8 +128,9 @@ class VisualOdometry():
         height, width = self.images[i].shape
         img3 = cv2.resize(img3, (width, height))
 
-        cv2.imshow("image", img3)
-        cv2.waitKey(200)
+        # cv2.imshow("image", img3)
+        # cv2.destroyWindow("image")
+        # cv2.waitKey(200)
 
         # Получение списока точек соответствия первого и воторого изображения
         q1 = np.float32([kp1[m.queryIdx].pt for m in good])
@@ -218,10 +218,10 @@ class VisualOdometry():
 
 
 def main():
-    data_dir = 'data'#"KITTI_sequence_1"  # Try KITTI_sequence_2 too
+    data_dir = 'train_data'#"KITTI_sequence_1"  # Try KITTI_sequence_2 too
     vo = VisualOdometry(data_dir)
 
-    play_trip(vo.images)  # Прокомментируйте, чтобы не воспроизводить поездку
+    # play_trip(vo.images)  # Прокомментируйте, чтобы не воспроизводить поездку
 
     gt_path = []
 
@@ -237,7 +237,7 @@ def main():
         gt_path.append((gt_pose[0, 3], gt_pose[2, 3]))
         estimated_path.append((cur_pose[0, 3], cur_pose[2, 3]))
     # Отрисовка графиков
-    plotting.visualize_paths(estimated_path, estimated_path, "Visual Odometry", file_out=os.path.basename(data_dir) + ".html")
+    # plotting.visualize_paths(estimated_path, estimated_path, "Visual Odometry", file_out=os.path.basename(data_dir) + ".html")
 
     x = []
     y = []
@@ -247,7 +247,7 @@ def main():
         y.append(i[1])
         z.append(0)
 
-    t = np.linspace(0, 10)
+    t = np.linspace(0, 3, len(x))
     dataSet = np.array([x, y, z])  # Комбинируем наши позиционные координаты
     numDataPoints = len(t)
 
@@ -269,18 +269,22 @@ def main():
 
 
         # Добавляем метки
-        ax.set_title('Траектория движения \nTime = ' + str(np.round(t[num], decimals=2)) + ' sec')
-
+        # ax.set_title('Траектория движения \nTime = ' + str(np.round(t[num], decimals=2)) + ' sec')
+        ax.set_title('Траектория движения')
 
     fig = plt.figure()
     ax = plt.axes(projection='3d')
-    line_ani = animation.FuncAnimation(fig, animate_func, interval=100,
+
+    line_ani = animation.FuncAnimation(fig, animate_func, interval=1/len(x),
                                     frames=numDataPoints)
     # plt.show()
 
-    # f = r"C:/Users/Hp/Desktop/visual_odometry/вид_сверху.gif"
-    # writergif = animation.PillowWriter(fps=numDataPoints/6)
-    # line_ani.save(f, writer=writergif)
+    cv2.destroyAllWindows()
+    plt.close('all')
+    f = r"C:/Users/Hp/Desktop/Projects/computer_vision/visual_odometry/train_data/вид_сбоку.gif"
+    # f = r"C:/Users/Hp/Desktop/Projects/computer_vision/visual_odometry/train_data/вид_сверху.gif"
+    writergif = animation.PillowWriter(fps = numDataPoints/6)
+    line_ani.save(f, writer=writergif)
 
 if __name__ == "__main__":
     main()

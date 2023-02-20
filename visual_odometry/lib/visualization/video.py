@@ -38,7 +38,6 @@ def play_trip(l_frames, r_frames=None, lat_lon=None, timestamps=None, color_mode
             show_image = put_text(show_image, "bottom_left", f"{lat}, {lon}")
 
         cv2.imshow(win_name, show_image)
-
         key = cv2.waitKey(waite_time)
         if key == 27:  # ESC
             break
