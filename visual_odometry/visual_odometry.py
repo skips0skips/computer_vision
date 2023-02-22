@@ -2,59 +2,73 @@ import os
 import numpy as np
 import cv2
 
-from lib.visualization import plotting
-from lib.visualization.video import play_trip
-
 from tqdm import tqdm
 
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import animation
+
+
+class CalibReader:
+    _file_name: str = "leftImage.yaml"
+
+    def initialize(self, file_name: str = "", param=list()) -> bool:
+        self._file_name = file_name
+        self._param = param
+
+    def read(self) -> str:
+        file_name = self._file_name
+        list_param = self._param
+        fs = cv2.FileStorage(file_name, cv2.FILE_STORAGE_READ)
+        param = dict()
+        if fs.isOpened():
+            for index in list_param:
+                param[index] = fs.getNode(index).mat()
+        fs.release()
+        return param
 
 class VisualOdometry():
     def __init__(self, data_dir):
-        self.K, self.P = self._load_calib(os.path.join(data_dir, 'calib.txt'))
-        self.gt_poses = self._load_poses(os.path.join(data_dir,"poses.txt"))
+        par = ["K", "D", "r", "t"]
+        calib = CalibReader()
+        calib.initialize(file_name=os.path.join(data_dir,"leftImage.yml"), param=par)
+        matrix = calib.read()
+        self.K = matrix.get('K')
+        self.P = np.pad(self.K, ((0,0),(0,1)), mode='constant', constant_values=0)
+
+        self.gt_poses = self._load_poses(self, data_dir)
         self.images = self._load_images(os.path.join(data_dir,"image_l"))
-        self.orb = cv2.ORB_create(99999999) #3000     #инициализация детектора ORB 7500 - хорошо
+        self.orb = cv2.ORB_create(15000) #3000     #инициализация детектора ORB 7500 - хорошо
         FLANN_INDEX_LSH = 6
         index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
         search_params = dict(checks=50)
         self.flann = cv2.FlannBasedMatcher(indexParams=index_params, searchParams=search_params)
 
     @staticmethod
-    def _load_calib(filepath):
-        """
-        Функция загружает калибровку камеры
-        Параметры:
-        filepath - путь к файлу камеры (str)
-        Возвращает:
-        K (ndarray): Внутренние параметры
-        P (ndarray): Проекционная матрица
-
-        """
-        with open(filepath, 'r') as f:   #открывается файл в режиме чтения
-            params = np.fromstring(f.readline(), dtype=np.float64, sep=' ')     #params одномерный массив, который заполнен данными из одной целой строки файла
-            P = np.reshape(params, (3, 4))      #изменяет форму массива на размер (3, 4)
-            K = P[0:3, 0:3]     #уберает нули
-        return K, P
+    def _image_count(filepath):
+        '''
+        Считаем количество изображений для поз
+        '''
+        img_folder = os.listdir(os.path.join(filepath,"image_l"))
+        img_count = len(img_folder)
+        return img_count
 
     @staticmethod
-    def _load_poses(filepath):
+    def _load_poses(self, filepath):
         """
         Функция загружает позиции GT
         Параметры:
-        filepath - путь к файлу камеры (str)
+        filepath - путь к корневой папке для функции "_image_count"
         Возвращает:
         poses (ndarray):  массив с позицией
         """
+
         poses = []
-        with open(filepath, 'r') as f:      #открывается файл в режиме чтения
-            for line in f.readlines():      #считывается строка
-                T = np.fromstring(line, dtype=np.float64, sep=' ')      #размерность [0:12]
-                T = T.reshape(3, 4)     #размерность [3:4]
-                T = np.vstack((T, [0, 0, 0, 1]))    #добавляет массив [0,0,0,1] в конец массива
-                poses.append(T)
+        for i in range(self._image_count(filepath)):    #создаем позы по кол-ву изображений
+            a = '1 0 -0 -0 -0 1 -0 -0 0 0 1 0'
+            T = np.fromstring(a, dtype=np.float64, sep=' ')      #размерность [0:12]
+            T = T.reshape(3, 4)     #размерность [3:4]
+            T = np.vstack((T, [0, 0, 0, 1]))    #добавляет массив [0,0,0,1] в конец массива
+            poses.append(T)
         return poses
 
     @staticmethod
@@ -117,20 +131,22 @@ class VisualOdometry():
                  matchesMask = None, # Маска, определяющая, какие совпадения будут нарисованы. Если маска пуста, все совпадения отображаются
                  flags = 2) #Флаги, устанавливающие функции рисования
 
-        # Рисует найденные совпадения ключевых точек из двух изображений.
-        # images[i], images[i-1] - первое и второе исходное изображение
-        # kp1, kp2 - ключевые точки из первого и второго исходного изображения
-        # good - список точек соответствия первого и воторого изображения
-        # outImg - вывод изображения
+        '''
+        Рисует найденные совпадения ключевых точек из двух изображений.
+        images[i], images[i-1] - первое и второе исходное изображение
+        kp1, kp2 - ключевые точки из первого и второго исходного изображения
+        good - список точек соответствия первого и воторого изображения
+        outImg - вывод изображения
+        '''
+
         img3 = cv2.drawMatches(self.images[i], kp1, self.images[i-1],kp2, good ,outImg = None,**draw_params)
 
         # Меняет размер drawMatches на размер одного изображения
         height, width = self.images[i].shape
         img3 = cv2.resize(img3, (width, height))
 
-        # cv2.imshow("image", img3)
-        # cv2.destroyWindow("image")
-        # cv2.waitKey(200)
+        cv2.imshow("image", img3)
+        cv2.waitKey(100)
 
         # Получение списока точек соответствия первого и воторого изображения
         q1 = np.float32([kp1[m.queryIdx].pt for m in good])
@@ -177,7 +193,7 @@ class VisualOdometry():
             hom_Q1 = cv2.triangulatePoints(self.P, P, q1.T, q2.T)
             hom_Q2 = np.matmul(T, hom_Q1)
 
-            # Не Гомогенизировать
+            # Не гомогенизировать
             uhom_Q1 = hom_Q1[:3, :] / hom_Q1[3, :]
             uhom_Q2 = hom_Q2[:3, :] / hom_Q2[3, :]
 
@@ -190,9 +206,12 @@ class VisualOdometry():
                                      np.linalg.norm(uhom_Q2.T[:-1] - uhom_Q2.T[1:], axis=-1))
             return sum_of_pos_z_Q1 + sum_of_pos_z_Q2, relative_scale
 
-        # разложиение существенной матрицы
-        # R1, R2 - первая и вторая из возможных матриц вращения
-        # t - один из возможных вариантов перевода
+        '''
+        Разложиение существенной матрицы
+        R1, R2 - первая и вторая из возможных матриц вращения
+        t - один из возможных вариантов перевода
+        '''
+
         R1, R2, t = cv2.decomposeEssentialMat(E)
         t = np.squeeze(t) #удаляется лишняя ось в массиве
 
@@ -218,14 +237,11 @@ class VisualOdometry():
 
 
 def main():
-    data_dir = 'train_data'#"KITTI_sequence_1"  # Try KITTI_sequence_2 too
+    data_dir = 'train_data'
     vo = VisualOdometry(data_dir)
 
-    # play_trip(vo.images)  # Прокомментируйте, чтобы не воспроизводить поездку
-
-    gt_path = []
-
     estimated_path = []
+
     for i, gt_pose in enumerate(tqdm(vo.gt_poses, unit="pose")): #передается массив с позицией, i - индекс
         if i == 0:
             cur_pose = gt_pose
@@ -234,10 +250,7 @@ def main():
             transf = vo.get_pose(q1, q2) #transf = np.nan_to_num(transf, neginf=0,posinf=0)
             transf = np.nan_to_num(transf, neginf=0,posinf=0)
             cur_pose = np.matmul(cur_pose, np.linalg.inv(transf)) #вычисляем обратную матрицу transf и находим произведение с cur_pose
-        gt_path.append((gt_pose[0, 3], gt_pose[2, 3]))
         estimated_path.append((cur_pose[0, 3], cur_pose[2, 3]))
-    # Отрисовка графиков
-    # plotting.visualize_paths(estimated_path, estimated_path, "Visual Odometry", file_out=os.path.basename(data_dir) + ".html")
 
     x = []
     y = []
@@ -247,44 +260,50 @@ def main():
         y.append(i[1])
         z.append(0)
 
-    t = np.linspace(0, 3, len(x))
+    t = np.linspace(0, 3, len(x)) # "Временной" массив - задает секунды анимации
     dataSet = np.array([x, y, z])  # Комбинируем наши позиционные координаты
     numDataPoints = len(t)
 
     def animate_func(num):
-        ax.clear()  # Очищаем фигуру для обновления линии, точки,
-                    # заголовка и осей  # Обновляем линию траектории (num+1 из-за индексации Python)
+        ax.clear()  # Очищаем фигуру для обновления линии, точки, заголовка и осей
+
         if (num < len(x)):
             ax.plot3D(dataSet[0, :num+1], dataSet[1, :num+1],
-                        dataSet[2, :num+1], c='blue')    # Обновляем локацию точки
+                        dataSet[2, :num+1], c='blue') # Обновляем линию траектории (num+1 из-за индексации Python)
             ax.scatter(dataSet[0, num], dataSet[1, num], dataSet[2, num],
-                        c='blue', marker='o')    # Добавляем постоянную начальную точку
+                        c='blue', marker='o') # Обновляем локацию точки
             ax.plot3D(dataSet[0, 0], dataSet[1, 0], dataSet[2, 0],
-                        c='black', marker='o')    # Задаем пределы для осей
-        ax.set_xlim3d([min(x)-5, max(x)+10])
+                        c='black', marker='o')   # Добавляем постоянную начальную точку
+
+        ax.set_xlim3d([min(x)-5, max(x)+10]) # Задаем пределы для оси X, Y, Z
         ax.set_ylim3d([min(y)-5, max(y)+10])
         ax.set_zlim3d([0, 1])
+
+        '''
+        Для графика "вид сверху" убирает оси и фиксирует положение вида сверху
+        '''
         # ax.set_axis_off()
         # ax.view_init(90, 270)
 
-
-        # Добавляем метки
-        # ax.set_title('Траектория движения \nTime = ' + str(np.round(t[num], decimals=2)) + ' sec')
+        # Добавляем название графика
         ax.set_title('Траектория движения')
 
+    # Рисуем график
     fig = plt.figure()
     ax = plt.axes(projection='3d')
 
     line_ani = animation.FuncAnimation(fig, animate_func, interval=1/len(x),
                                     frames=numDataPoints)
-    # plt.show()
+
+    plt.show() # Для показа графика раскомментировать
 
     cv2.destroyAllWindows()
     plt.close('all')
-    f = r"C:/Users/Hp/Desktop/Projects/computer_vision/visual_odometry/train_data/вид_сбоку.gif"
-    # f = r"C:/Users/Hp/Desktop/Projects/computer_vision/visual_odometry/train_data/вид_сверху.gif"
-    writergif = animation.PillowWriter(fps = numDataPoints/6)
-    line_ani.save(f, writer=writergif)
+
+    # Сохраняем анимацию
+    # gif = os.path.join(data_dir, 'вид_сбоку_test.gif')
+    # writergif = animation.PillowWriter(fps = numDataPoints/6)
+    # line_ani.save(gif, writer=writergif)
 
 if __name__ == "__main__":
     main()
