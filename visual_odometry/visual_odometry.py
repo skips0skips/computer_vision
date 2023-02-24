@@ -7,6 +7,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
+from framde import framde
 
 class CalibReader:
     _file_name: str = "leftImage.yaml"
@@ -237,7 +238,8 @@ class VisualOdometry():
 
 
 def main():
-    data_dir = 'train_data'
+    data_dir = 'data'
+    framde() #обработка видео
     vo = VisualOdometry(data_dir)
 
     estimated_path = []
